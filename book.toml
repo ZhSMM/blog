@@ -15,7 +15,7 @@ mathjax-support = false
 no-section-label = true
 git-repository-url = "https://github.com/ZhSMM/blog"
 git-repository-icon = "fa-github"
-edit-url-template = "https://github.com/ZhSMM/blog/edit/master/guide/{path}"
+edit-url-template = "https://github.com/ZhSMM/blog/edit/main/{path}"
 site-url = "/"
 cname = "blog.268574.xyz"
 
