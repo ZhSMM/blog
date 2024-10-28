@@ -14,3 +14,9 @@
 
 - [rust入门](./program/rust/00-summary.md)
   - [环境搭建](./program/rust/01-environment.md)
+
+- [mysql](./program/mysql/00-summary.md)
+  - [视图](./program/mysql/01_视图.md)
+  - [存储过程](./program/mysql/02_存储过程和函数.md)
+  - [触发器](./program/mysql/03_触发器.md)
+  - [分区](./program/mysql/04_分区.md)
