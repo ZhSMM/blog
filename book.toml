@@ -18,8 +18,6 @@ git-repository-icon = "fa-github"
 edit-url-template = "https://github.com/ZhSMM/blog/edit/master/guide/{path}"
 site-url = "/"
 cname = "blog.268574.xyz"
-input-404 = "not-found.md"
-
 
 [output.html.playground]
 editable = true
