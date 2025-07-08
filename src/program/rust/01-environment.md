@@ -83,8 +83,14 @@ rustup doc
 + TOML文件：Even Better TOML
 + 错误展示：Error Lens
 + Debugger程序：CodeLLDB
++ 检查依赖更新检测：Dependi
 
-8、卸载环境：
+8、VsCode设置：快捷键 `Ctrl + ,` 打开设置
+
++ 勾选：`Debug:Allow Breakpoints Everywhere`
++ cargo check：将`Rust-analyzer › Check: Command`设置为 clippy
+
+9、卸载环境：
 
 ```
 rustup self uninstall
@@ -112,3 +118,6 @@ cargo check
 # 运行，等效于crago build && ./xx.exe
 cargo run [--release|--debug]
 ```
+
+
+
