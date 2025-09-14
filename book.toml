@@ -8,9 +8,8 @@ title = "编程笔记"
 
 # 配置项说明：https://hellowac.github.io/mdbook-doc-zh/zh-cn/format/configuration/renderers.html
 [output.html]
-search=true
 default-theme = "rust"
-preferred-dark-theme = "navy"
+preferred-dark-theme = "ayu"
 curly-quotes = false
 mathjax-support = false
 no-section-label = true
