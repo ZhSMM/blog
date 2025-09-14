@@ -12,7 +12,7 @@ on:
     paths:
       - "src/**"                        # 匹配src目录下的所有目录和子目录
       - "book.toml"                     # 配置文件变更也触发构建（可选）
-      - ".github/workflows/deploy.yml"  # 工作流文件本身变更时触发
+      - ".github/workflows/mdbook.yml"  # 工作流文件本身变更时触发
 
   # 保留手动触发选项
   workflow_dispatch:
