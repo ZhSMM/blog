@@ -8,8 +8,13 @@ on:
   # Runs on pushes targeting the default branch
   push:
     branches: ["main"]
+    # 仅当main分支的src目录下文件有变动时处罚构建
+    paths:
+      - "src/**"                        # 匹配src目录下的所有目录和子目录
+      - "book.toml"                     # 配置文件变更也触发构建（可选）
+      - ".github/workflows/deploy.yml"  # 工作流文件本身变更时触发
 
-  # Allows you to run this workflow manually from the Actions tab
+  # 保留手动触发选项
   workflow_dispatch:
 
 # Sets permissions of the GITHUB_TOKEN to allow deployment to GitHub Pages
@@ -33,10 +38,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Install mdBook
+        # 使用预编译二进制代替cargo安装，加快速度
         run: |
-          curl --proto '=https' --tlsv1.2 https://sh.rustup.rs -sSf -y | sh
-          rustup update
-          cargo install --version ${MDBOOK_VERSION} mdbook
+          curl -L https://github.com/rust-lang/mdBook/releases/download/v${MDBOOK_VERSION}/mdbook-v${MDBOOK_VERSION}-x86_64-unknown-linux-gnu.tar.gz | tar xzf -
+          sudo mv mdbook /usr/local/bin/
       - name: Setup Pages
         id: pages
         uses: actions/configure-pages@v5
