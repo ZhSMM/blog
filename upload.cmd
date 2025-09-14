@@ -1,5 +1,6 @@
 @echo off
 setlocal enabledelayedexpansion
+chcp 65001
 
 :: 检查是否在Git仓库中
 git rev-parse --is-inside-work-tree >nul 2>&1
