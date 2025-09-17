@@ -53,9 +53,7 @@ jobs:
         run: |
           cargo install mdbook@${MDBOOK_VERSION}
           cargo install mdbook-toc@${MDBOOK_TOC_VERSION}
-          cargo install mdbook-katex@${MDBOOK_KATEX_VERSION}
           cargo install mdbook-pagetoc@${MDBOOK_PAGETOC_VERSION}
-          cargo install mdbook-mermaid@${MDBOOK_MERMAID_VERSION}
       - name: Setup Pages
         id: pages
         uses: actions/configure-pages@v5
