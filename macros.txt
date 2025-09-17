@@ -1,0 +1,4 @@
+\grad:{\nabla}
+\R:{\mathbb{R}^{#1 \times #2}}
+\mat:{\begin{pmatrix} #1 & #2 \\ #3 & #4 \end{pmatrix}}
+\test:{\text{text}}

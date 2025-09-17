@@ -7,7 +7,7 @@ name: Deploy mdBook site to Pages
 on:
   # Runs on pushes targeting the default branch
   push:
-    branches: ["main"]
+    branches: [ "main" ]
     # 仅当main分支的src目录下文件有变动时处罚构建
     paths:
       - "src/**"                        # 匹配src目录下的所有目录和子目录
@@ -36,17 +36,27 @@ jobs:
     env:
       MDBOOK_VERSION: 0.4.36
     steps:
-      - uses: actions/checkout@v4
-      - name: Install mdBook
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Rust & Cargo
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+
+      - name: Install mdBook & mdbook-katex
         # 使用预编译二进制代替cargo安装，加快速度
         run: |
-          curl -L https://github.com/rust-lang/mdBook/releases/download/v${MDBOOK_VERSION}/mdbook-v${MDBOOK_VERSION}-x86_64-unknown-linux-gnu.tar.gz | tar xzf -
-          sudo mv mdbook /usr/local/bin/
+          cargo install mdbook@${MDBOOK_VERSION}
+          cargo install mdbook-katex@${MDBOOK_KATEX_VERSION}
+
       - name: Setup Pages
         id: pages
         uses: actions/configure-pages@v5
+
       - name: Build with mdBook
         run: mdbook build
+
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:

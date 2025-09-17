@@ -9,7 +9,7 @@ title = "编程笔记"
 # 配置项说明：https://hellowac.github.io/mdbook-doc-zh/zh-cn/format/configuration/renderers.html
 [output.html]
 default-theme = "rust"
-preferred-dark-theme = "ayu"
+preferred-dark-theme = "navy"
 curly-quotes = false
 mathjax-support = false
 no-section-label = true
@@ -38,3 +38,21 @@ boost-paragraph = 1
 expand = true
 heading-split-level = 3
 copy-js = true
+
+# 启用 mdbook-katex 预处理器（核心）
+# https://github.com/jontze/mdbook-katex
+[preprocessor.katex]
+renderers = ["html"]
+macros = "macros.txt"
+# 启用katex预处理
+enable = true
+# 允许行内公式（$...$），默认开启
+allow-inline = true
+# 允许块级公式（$$...$$），默认开启
+allow-block = true
+# 自动为块级公式生成编号（如 (1.1)），按需开启
+auto-number = true
+# 公式编号格式（{chapter}.{section}.{equation}）
+number-format = "{chapter}.{section}.{equation}"
+# 加载 KaTeX 扩展（如支持化学公式、流程图，按需添加）
+extensions = ["katex-mhchem", "tikz"]  # mhchem 支持化学公式（如 \ce{H2O}），tikz 支持简单绘图
