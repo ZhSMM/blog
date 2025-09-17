@@ -1,6 +1,9 @@
 # 基于 GitHub + mdBook 搭建个人笔记
 
-#### 准备
+* auto-gen TOC;
+{:toc}
+
+### 准备
 
 准备工作如下：
 
@@ -23,6 +26,8 @@
 3. 注册一个[Github账号](https://github.com/)，并新建一个Repsitory。
 
 
+
+### 项目
 
 #### 创建项目
 
@@ -264,6 +269,18 @@ git push
 - 打开 GitHub 仓库 → 点击顶部「Settings」→ 左侧「Pages」
 - 在「Source」中选择「Deploy from a branch」→ 分支选择 `gh-pages`（由 GitHub Actions 自动创建）
 - 点击「Save」，等待 1-2 分钟，页面会显示访问地址（如 `https://your-username.github.io/my-tech-notes/`）
+
+
+```mermaid
+graph TD;
+    A[开始] --> B{判断};
+    B -->|是| C[执行操作];
+    B -->|否| D[结束];
+    C --> D;
+```
+
+
+
 
 
 

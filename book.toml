@@ -9,7 +9,7 @@ title = "编程笔记"
 # 配置项说明：https://hellowac.github.io/mdbook-doc-zh/zh-cn/format/configuration/renderers.html
 [output.html]
 default-theme = "rust"
-preferred-dark-theme = "navy"
+preferred-dark-theme = "light"
 curly-quotes = false
 mathjax-support = false
 no-section-label = true
@@ -18,6 +18,8 @@ git-repository-icon = "fa-github"
 edit-url-template = "https://github.com/ZhSMM/blog/edit/main/{path}"
 site-url = "/"
 cname = "blog.268574.xyz"
+additional-js = ["mermaid.min.js", "mermaid-init.js", "theme/pagetoc.js"]
+additional-css = ["theme/pagetoc.css"]
 
 [output.html.playground]
 editable = true
@@ -56,3 +58,15 @@ auto-number = true
 number-format = "{chapter}.{section}.{equation}"
 # 加载 KaTeX 扩展（如支持化学公式、流程图，按需添加）
 extensions = ["katex-mhchem", "tikz"]  # mhchem 支持化学公式（如 \ce{H2O}），tikz 支持简单绘图
+
+[preprocessor.pagetoc]
+
+# https://github.com/badboy/mdbook-toc
+[preprocessor.toc]
+command = "mdbook-toc"
+renderer = ["html"]
+marker = "* auto-gen TOC;\n{:toc}"
+max-level = 4
+
+[preprocessor.mermaid]
+command = "mdbook-mermaid"

@@ -34,8 +34,11 @@ jobs:
   build:
     runs-on: ubuntu-latest
     env:
-      MDBOOK_VERSION: 0.4.48
+      MDBOOK_VERSION: 0.4.52
+      MDBOOK_TOC_VERSION: 0.14.2
+      MDBOOK_PAGETOC_VERSION: 0.2.0
       MDBOOK_KATEX_VERSION: 0.9.4
+      MDBOOK_MERMAID_VERSION: 0.16.0
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -49,8 +52,10 @@ jobs:
         # 使用预编译二进制代替cargo安装，加快速度
         run: |
           cargo install mdbook@${MDBOOK_VERSION}
+          cargo install mdbook-toc@${MDBOOK_TOC_VERSION}
           cargo install mdbook-katex@${MDBOOK_KATEX_VERSION}
-
+          cargo install mdbook-pagetoc@${MDBOOK_PAGETOC_VERSION}
+          cargo install mdbook-mermaid@${MDBOOK_MERMAID_VERSION}
       - name: Setup Pages
         id: pages
         uses: actions/configure-pages@v5
