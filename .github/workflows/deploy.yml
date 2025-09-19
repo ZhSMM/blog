@@ -29,6 +29,7 @@ jobs:
       MDBOOK_VERSION: 0.4.52
       MDBOOK_TOC_VERSION: 0.14.2
       MDBOOK_PAGETOC_VERSION: 0.2.0
+      MDBOOK_MERMAID_VERSION: 0.16.0
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -66,6 +67,7 @@ jobs:
           cargo install mdbook@${MDBOOK_VERSION}
           cargo install mdbook-toc@${MDBOOK_TOC_VERSION}
           cargo install mdbook-pagetoc@${MDBOOK_PAGETOC_VERSION}
+          cargo install mdbook-mermaid@${MDBOOK_PAGETOC_VERSION}
 
       - name: Build the book
         run: mdbook build

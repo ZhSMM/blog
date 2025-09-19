@@ -17,7 +17,7 @@ git-repository-icon = "fa-github"
 edit-url-template = "https://github.com/ZhSMM/blog/edit/main/{path}"
 site-url = "/"
 cname = "blog.268574.xyz"
-additional-js = ["theme/pagetoc.js"]
+additional-js = ["theme/pagetoc.js", "mermaid.min.js", "mermaid-init.js"]
 additional-css = ["theme/pagetoc.css"]
 
 [output.html.playground]
@@ -48,3 +48,12 @@ command = "mdbook-toc"
 renderer = ["html"]
 marker = "* auto-gen TOC;\n{:toc}"
 max-level = 4
+
+[preprocessor.mermaid]
+command = "mdbook-mermaid"
+# 图表主题（可选：default, dark, forest, neutral）
+theme = "default"
+# 图表宽度（默认 100%）
+width = "100%"
+# 图表高度（自动适应内容）
+height = "auto"
