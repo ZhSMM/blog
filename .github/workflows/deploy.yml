@@ -3,7 +3,7 @@ name: Deploy mdBook with Pages Artifact
 on:
   # 在推送到 main 分支时触发部署
   push:
-    branches: ["main"]
+    branches: [ "main" ]
     paths:
       - "src/**"                        # 匹配src目录下的所有目录和子目录
       - "book.toml"                     # 配置文件变更也触发构建（可选）
@@ -36,23 +36,31 @@ jobs:
           # 获取完整提交历史，确保hashFiles能正确计算哈希
           fetch-depth: '0'
 
-      - name: Cache Cargo registry
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-cargo-
-
       - name: Install Rust & Cargo
         uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: stable
 
-      - name: Install mdBook & mdbook-toc & mdbook-pagetoc
+      - name: Cache Cargo Dependencies
+        uses: actions/cache@v4
+        id: cargo-cache
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: ${{ runner.os }}-cargo-deps-${{ hashFiles('**/Cargo.lock') }}-${{ hashFiles('rust-toolchain.toml', 'rust-toolchain') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-deps-${{ hashFiles('**/Cargo.lock') }}-
+            ${{ runner.os }}-cargo-deps-
+
+      - name: Cache Target Directory
+        uses: actions/cache@v4
+        id: target-cache
+        with:
+          path: target
+          key: ${{ runner.os }}-target-${{ hashFiles('**/Cargo.lock') }}-${{ hashFiles('**/src/**') }}
+
+      - name: Install mdBook & Plugins
         # 使用预编译二进制代替cargo安装，加快速度
         run: |
           cargo install mdbook@${MDBOOK_VERSION}
