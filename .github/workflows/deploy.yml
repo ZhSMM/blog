@@ -74,6 +74,9 @@ jobs:
           cargo install mdbook-pagetoc@${MDBOOK_PAGETOC_VERSION}
           cargo install mdbook-mermaid@${MDBOOK_MERMAID_VERSION}
 
+      - name: List ~/.cargo/bin after caching
+        run: ls -la ~/.cargo/bin
+
       - name: Build the book
         run: mdbook build
 
