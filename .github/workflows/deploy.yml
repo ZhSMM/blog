@@ -49,7 +49,8 @@ jobs:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
-          key: ${{ runner.os }}-cargo-deps-${{ hashFiles('**/Cargo.lock') }}-${{ hashFiles('rust-toolchain.toml', 'rust-toolchain') }}
+            ~/.cargo/bin
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}-v3
           restore-keys: |
             ${{ runner.os }}-cargo-deps-${{ hashFiles('**/Cargo.lock') }}-
             ${{ runner.os }}-cargo-deps-
@@ -59,15 +60,19 @@ jobs:
         id: target-cache
         with:
           path: target
-          key: ${{ runner.os }}-target-${{ hashFiles('**/Cargo.lock') }}-${{ hashFiles('**/src/**') }}
+          key: ${{ runner.os }}-target-${{ hashFiles('**/Cargo.lock') }}-${{ hashFiles('**/src/**', 'book.toml') }}-v2
+          restore-keys: |
+            ${{ runner.os }}-target-${{ hashFiles('**/Cargo.lock') }}-
+            ${{ runner.os }}-target
 
       - name: Install mdBook & Plugins
-        # 使用预编译二进制代替cargo安装，加快速度
+        # 只有当缓存未命中时才执行安装
+        if: steps.cargo-cache.outputs.cache-hit != 'true'
         run: |
           cargo install mdbook@${MDBOOK_VERSION}
           cargo install mdbook-toc@${MDBOOK_TOC_VERSION}
           cargo install mdbook-pagetoc@${MDBOOK_PAGETOC_VERSION}
-          cargo install mdbook-mermaid@${MDBOOK_PAGETOC_VERSION}
+          cargo install mdbook-mermaid@${MDBOOK_MERMAID_VERSION}
 
       - name: Build the book
         run: mdbook build
