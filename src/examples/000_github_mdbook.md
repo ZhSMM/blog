@@ -1,4 +1,4 @@
-# 基于 GitHub + mdBook 搭建个人笔记
+# 基于GitHub+mdBook搭建个人笔记
 
 * auto-gen TOC;
 {:toc}
