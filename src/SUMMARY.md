@@ -2,7 +2,8 @@
 
 # 案例
 
-- [github + markdown搭建笔记工具](./examples/000_github_mdbook.md)
+- [github+markdown搭建笔记工具](./examples/000_github_mdbook.md)
+- [github CI部署](./examples/001_github_ci.md)
 
 # 工具相关
 
