@@ -25,6 +25,8 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    environment:
+      name: github-pages
     env:
       MDBOOK_VERSION: ${{vars.MDBOOK_VERSION}}
       MDBOOK_TOC_VERSION: ${{vars.MDBOOK_TOC_VERSION}}
