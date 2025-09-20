@@ -1,0 +1,8 @@
+name: Auto Build and Release # 工作流的名称
+on:
+  push:
+    tags:
+      - 'v*' # 推荐：仅在推送版本标签（如 v1.0.0）时触发发布
+  workflow_dispatch: # 允许在 GitHub 界面手动触发工作流
+
+jobs:
