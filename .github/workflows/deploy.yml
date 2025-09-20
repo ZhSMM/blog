@@ -50,20 +50,9 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             ~/.cargo/bin
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}-v3
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/book.toml') }}-${{vars.BUILD_CACHE_VERSION}}
           restore-keys: |
-            ${{ runner.os }}-cargo-deps-${{ hashFiles('**/Cargo.lock') }}-
-            ${{ runner.os }}-cargo-deps-
-
-      - name: Cache Target Directory
-        uses: actions/cache@v4
-        id: target-cache
-        with:
-          path: target
-          key: ${{ runner.os }}-target-${{ hashFiles('**/Cargo.lock') }}-${{ hashFiles('**/src/**', 'book.toml') }}-v2
-          restore-keys: |
-            ${{ runner.os }}-target-${{ hashFiles('**/Cargo.lock') }}-
-            ${{ runner.os }}-target
+            ${{ runner.os }}-cargo-deps--
 
       - name: Install mdBook & Plugins
         # 只有当缓存未命中时才执行安装

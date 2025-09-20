@@ -80,7 +80,9 @@ GitHub Actions 的应用场景非常广泛，主要包括：
 
 ### 矩阵构建
 
-**矩阵构建（matrix strategy）** 允许你在多个操作系统、语言版本等不同配置下同时运行作业，这能有效测试代码的兼容性。示例如下：
+**矩阵构建（matrix strategy）** 允许你**使用单个作业配置，自动在多个环境、版本或平台组合下并行运行任务**。
+
+示例如下：下面配置会生成 2 * 3 个独立的作业，每个作业支持使用 `matrix.<variable-name>` 获取其上下文
 
 ```yaml
 jobs:
@@ -100,18 +102,353 @@ jobs:
 
 
 
-### 缓存依赖
+#### include和exclude
 
-使用 `actions/cache`Action 缓存依赖项（如 `node_modules`或 Python 包），可以显著减少重复下载依赖的时间，加快工作流运行速度。示例如下：
+为了更精细地控制矩阵组合，你可以使用 `include`和 `exclude`关键字。
+
+- **`include`**：用于向矩阵中添加**额外的、非自动生成的组合**，或为现有组合添加新的属性。
+- **`exclude`**：用于**移除**自动生成的特定组合。
+
+示例：
 
 ```yaml
-- name: Cache node modules
+strategy:
+  matrix:
+    os: [ubuntu-latest, windows-latest, macOS]
+    node-version: [14.x, 16.x]
+    include:
+      # 添加一个未在原始矩阵中定义的 python-version 组合
+      - os: ubuntu-latest
+        node-version: 18.x # 与现有组合重复，但可以添加新属性
+        python-version: '3.11' # 新属性
+      - os: windows-latest
+        node-version: 20.x # 全新的组合
+      
+      # 移除所有在 Windows 上运行 Node.js 14.x 的组合
+      - os: windows-latest
+        node-version: 14.x
+      # 移除所有在 macOS 上运行 Node.js 16.x 的组合
+      - os: macos-latest
+        node-version: 16.x
+```
+
+
+
+#### 控制并行与失败策略
+
+`fail-fast`（默认为 `true`）：如果任一矩阵作业失败，则取消所有正在进行的作业。将其设置为 `false`可以让所有作业完成，从而获得完整的兼容性报告。
+
+`max-parallel`：限制同时运行的矩阵作业数量，可用于控制资源消耗。
+
+```yaml
+strategy:
+  fail-fast: false # 一个失败不会影响其他作业
+  max-parallel: 4   # 最多同时运行4个作业
+  matrix:
+    # ... 矩阵定义 ...
+```
+
+
+
+#### 缓存优化
+
+矩阵作业通常需要安装依赖。为不同组合创建高效的缓存至关重要。
+
+```yaml
+- name: Cache dependencies
   uses: actions/cache@v3
   with:
-    path: ~/.npm
+    path: |
+      ~/.npm
+      node_modules
+    # 缓存键应包含矩阵变量，以便为不同组合创建独立缓存
+    key: ${{ runner.os }}-node-${{ matrix.node-version }}-${{ hashFiles('**/package-lock.json') }}
+```
+
+
+
+#### 结果聚合
+
+- **调试**：使用 `act`工具在本地运行和调试矩阵工作流，无需反复提交代码。
+- **结果聚合**：使用 `actions/upload-artifact`和 `actions/download-artifact`收集所有矩阵作业的测试结果（如覆盖率报告），并在最后一份作业中生成聚合报告。
+
+
+
+#### 完整示例
+
+```yaml
+name: Python Matrix Test
+
+on: [push, pull_request]
+
+jobs:
+  test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # 定义主维度
+        python-version: ['3.8', '3.9', '3.10', '3.11']
+        os: [ubuntu-latest, windows-latest]
+        # 定义依赖安装策略维度
+        dependencies: [minimal, latest]
+        
+        # 使用 include 为特定组合添加额外变量或覆盖原有变量
+        include:
+          - python-version: '3.8'
+            os: ubuntu-latest
+            torch-version: '1.13.1' # 为 PyTorch 等特定库固定旧版本
+          - python-version: '3.11'
+            os: ubuntu-latest
+            generate-coverage: true # 标记此组合用于生成最终覆盖率报告
+            
+        # 使用 exclude 排除不兼容或不需要的组合
+        exclude:
+          - python-version: '3.8'
+            dependencies: 'latest' # Python 3.8 不测试最新依赖
+          - os: windows-latest
+            dependencies: 'latest' # Windows 上也不测试最新依赖
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ matrix.python-version }}
+        cache: 'pip'
+        cache-dependency-path: requirements.txt
+
+    - name: Install dependencies (minimal)
+      if: matrix.dependencies == 'minimal'
+      run: pip install -r requirements.txt
+
+    - name: Install dependencies (latest)
+      if: matrix.dependencies == 'latest'
+      run: |
+        pip install -r requirements.txt
+        pip install --upgrade pip
+        pip-review --auto # 自动升级所有包到最新版本
+
+    - name: Run tests with pytest
+      run: pytest --cov=./ --cov-report=xml:coverage.xml -v
+      env:
+        PYTHONPATH: ${{ github.workspace }}
+
+    - name: Upload coverage report
+      if: always() # 即使测试失败也上传报告
+      uses: actions/upload-artifact@v3
+      with:
+        name: coverage-py-${{ matrix.python-version }}-${{ matrix.os }}
+        path: coverage.xml
+
+  # 一个汇总报告的作业，在所有矩阵作业完成后运行
+  combine-reports:
+    needs: test # 依赖 test 作业
+    runs-on: ubuntu-latest
+    if: always() # 即使有测试失败也运行
+    steps:
+      - name: Download all coverage artifacts
+        uses: actions/download-artifact@v3
+        with:
+          path: all-coverage-reports
+          pattern: coverage-*
+          merge-multiple: true
+
+      - name: Combine coverage reports
+        run: |
+          pip install coverage
+          python -m coverage combine all-coverage-reports/coverage-*.xml
+          python -m coverage report --show-missing
+          python -m coverage html
+        shell: bash
+
+      - name: Upload combined HTML report
+        uses: actions/upload-artifact@v3
+        with:
+          name: combined-coverage-report
+          path: htmlcov
+```
+
+
+
+### 缓存依赖
+
+#### 核心参数说明
+
+GitHub Actions 的 `actions/cache@v4`是一个非常重要的工具，它能通过**缓存依赖和构建产物来显著提升 CI/CD 流程的效率**，避免重复下载和编译，从而节省时间和计算资源。
+
+
+
+核心参数说明：
+
+- **`path`**：指定需要缓存的目录或文件的路径。可以是一个路径，也可以是多行字符串指定多个路径。
+- **`key`**：缓存唯一的标识符。通常根据 runner 的操作系统、项目依赖文件（如 `package-lock.json`）的哈希值等来生成。**只有当 `key`完全匹配时，才会恢复缓存**。
+- **`restore-keys`**：当没有找到与 `key`完全匹配的缓存时，会尝试用 `restore-keys`列表（按顺序）进行**前缀匹配**。这有助于找到相似的缓存，实现渐进式恢复。
+
+
+
+缓存键（Key）策略：设计一个好的 `key`是高效利用缓存的关键。
+
+| 策略                 | 描述                                                      | 示例                                                         |
+| :------------------- | :-------------------------------------------------------- | :----------------------------------------------------------- |
+| **基于依赖文件哈希** | 最常用。依赖文件（如lock文件）内容变化时，缓存自动失效。  | `key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}` |
+| **按操作系统分离**   | 不同操作系统的依赖和构建产物通常不兼容，需分开缓存。      | `key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}` |
+| **复合键**           | 结合多个维度（如OS、语言版本、项目）生成更精确的键。      | `key: ${{ runner.os }}-py-${{ matrix.python-version }}-${{ hashFiles('**/requirements.txt') }}` |
+| **短期缓存**         | 用于临时性需求，如调试。通常与工作流运行ID或提交SHA绑定。 | `key: cache-${{ github.run_id }}`                            |
+
+
+
+#### 不同语言的缓存设计
+
+**正确设置缓存路径（Path）**：路径设置是缓存恢复的关键。你需要根据操作系统和语言环境，准确指定需要缓存的目录。常见路径包括：
+
+| 环境/工具       | 缓存路径（Linux示例）                         | 缓存内容                         |
+| :-------------- | :-------------------------------------------- | :------------------------------- |
+| **Node.js/npm** | `~/.npm`                                      | npm 缓存目录                     |
+| **Python/pip**  | `~/.cache/pip`                                | pip 缓存目录                     |
+| **Rust/Cargo**  | `~/.cargo/registry`, `~/.cargo/git`, `target` | Cargo 注册表、git 依赖和构建输出 |
+| **Java/Gradle** | `~/.gradle/caches`, `~/.gradle/wrapper`       | Gradle 缓存和包装器              |
+| **通用容器**    | `node_modules`, `venv`, `target/release`      | 项目级的依赖目录和输出           |
+
+示例如下：
+
+1、JavaScript (npm)：缓存 npm 的缓存目录，而不是直接缓存 `node_modules`。
+
+```yaml
+- name: Get npm cache directory
+  id: npm-cache-dir
+  shell: bash
+  run: echo "dir=$(npm config get cache)" >> ${GITHUB_OUTPUT}
+- name: Cache npm dependencies
+  uses: actions/cache@v4
+  with:
+    path: ${{ steps.npm-cache-dir.outputs.dir }}
     key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
+```
+
+2、Python (pip)：Python 的缓存路径因操作系统而异，在矩阵构建中需特别注意。
+
+```yaml
+jobs:
+  build:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        include:
+          - os: ubuntu-latest
+            path: ~/.cache/pip
+          - os: macos-latest
+            path: ~/Library/Caches/pip
+          - os: windows-latest
+            path: ~\AppData\Local\pip\Cache
+    steps:
+      - uses: actions/cache@v4
+        with:
+          path: ${{ matrix.path }}
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+```
+
+3、Java (Maven)：Maven 的依赖默认存储在 `.m2`目录下。
+
+```yaml
+- uses: actions/cache@v4
+  with:
+    path: ~/.m2/repository
+    key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
+```
+
+4、Java (Gradle)：Gradle 缓存包括依赖和包装器。
+
+> 注意：缓存 Gradle 时需确保 Gradle 守护进程已停止，避免文件锁定。
+
+```yaml
+- uses: actions/cache@v4
+  with:
+    path: |
+      ~/.gradle/caches
+      ~/.gradle/wrapper
+    key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*') }}
+```
+
+5、Go：Go 的缓存路径也因操作系统不同而变化。
+
+```yaml
+- uses: actions/cache@v4
+  with:
+    path: |
+      ~/.cache/go-build   # Linux
+      ~/go/pkg/mod        # Go module cache
+    key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+```
+
+
+
+#### 缓存命中检查
+
+可以通过 `outputs`判断缓存是否命中，从而决定是否跳过安装步骤。
+
+```yaml
+- name: Check cache
+  id: cache-check
+  uses: actions/cache@v4
+  with:
+    path: ${{ matrix.path }}
+    key: ...
+- name: Install dependencies
+  if: steps.cache-check.outputs.cache-hit != 'true'
+  run: pip install -r requirements.txt
+```
+
+
+
+#### 缓存键重用
+
+**保存缓存时重用键**：在 `save`阶段重用 `restore`阶段计算出的键，避免重复计算。
+
+```yaml
+- uses: actions/cache/restore@v4
+  id: restore-cache
+  with:
+    path: path/to/dependencies
+    key: ${{ runner.os }}-key-${{ hashFiles('**/lockfile') }}
+- # ... build steps that may change the dependencies ...
+- uses: actions/cache/save@v4
+  with:
+    path: path/to/dependencies
+    key: ${{ steps.restore-cache.outputs.cache-primary-key }}
+```
+
+
+
+#### 分支缓存隔离与共享
+
+**分支缓存隔离与共享**：为不同分支创建独立的缓存，但允许回退到主分支缓存。
+
+```yaml
+- uses: actions/cache@v4
+  with:
+    path: path/to/dependencies
+    key: ${{ runner.os }}-npm-${{ github.ref_name }}-${{ hashFiles('**/package-lock.json') }}
     restore-keys: |
-      ${{ runner.os }}-node-
+      ${{ runner.os }}-npm-main-  # 回退到主分支缓存
+      ${{ runner.os }}-npm-       # 最后回退到任何npm缓存
+```
+
+
+
+#### 缓存最佳实践
+
+- **缓存内容**：优先缓存**依赖管理工具的缓存目录**（如 `~/.npm`、`~/.cache/pip`），而非直接缓存 `node_modules`或 `target`等构建输出目录。后者可能更大且效果不佳。
+- **缓存限制**：GitHub 对缓存有**容量和时间限制**。每个仓库的缓存总大小限制为 **10GB**，如果超过此限制，最早创建的缓存将被删除。
+- **避免缓存污染**：确保 `key`中包含足够唯一的标识（如依赖文件哈希），防止依赖变更后仍使用旧的缓存。
+- **清理缓存**：定期清理无用缓存。可以使用 GitHub API 或在工作流中添加清理步骤。
+
+```yaml
+- name: Clean old cache files
+  run: |
+    find ~/.gradle/caches -type f -mtime +30 -delete
 ```
 
 
@@ -391,7 +728,149 @@ F --> G[通知与监控]
 
 ### 部署到gh-pages分支
 
-部署到gh-pages是早期的主流做法，通过将构建的好的静态文件推送到仓库内一个单独的gh-pages分支来实现部署。主要特点如下：
+部署到gh-pages是早期的主流做法，通过将构建的好的静态文件推送到仓库内一个单独的gh-pages分支来实现部署。
 
-- 优点：配置简单，兼容大量旧项目和教程
-- 缺点：
+示例：
+
+```yaml
+name: Deploy to GitHub Pages (Old)
+on:
+  push:
+    branches: [ main ]
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4 # 检出代码
+      - name: Install and Build
+        run: |
+          npm install
+          npm run build # 执行项目构建
+      - name: Deploy to gh-pages branch
+        uses: peaceiris/actions-gh-pages@v3 # 使用第三方Action
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }} # 使用GITHUB_TOKEN认证
+          publish_dir: ./dist # 指定构建输出目录
+```
+
+
+
+### Pages Artifact
+
+Pages Artifact：将构建产物打包为一个 `artifact`上传，最后由专门的 Action 将其部署到 GitHub Pages。
+
+示例：
+
+```yaml
+name: Deploy to GitHub Pages (Modern)
+on:
+  push:
+    branches: [ main ]
+permissions: # ⚠️ 必须配置权限
+  contents: read
+  pages: write
+  id-token: write
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm' # 缓存依赖以加速构建
+      - name: Install dependencies
+        run: npm ci # 更严格、更快的依赖安装
+      - name: Build
+        run: npm run build
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3 # ⚡ 上传产物
+        with:
+          path: './dist' # 指定构建输出目录
+  deploy:
+    needs: build # 依赖build任务
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }} # 获取部署后的URL
+    steps:
+      - name: Deploy to GitHub Pages
+        uses: actions/deploy-pages@v4 # ⚡ 官方部署Action
+```
+
+
+
+配置注意事项：
+
+- **权限配置 (必须)**：必须在工作流文件中显式声明 `permissions`，或是在仓库的 `Settings > Actions > General`中授予工作流**读写权限**。
+- **环境设置**：部署任务中的 `environment`配置是可选的，但设置后可以在仓库的 `Environments`中查看每次部署的详细记录。
+
+
+
+## 自定义域名和HTTPS
+
+为 GitHub Pages 设置自定义域名和 HTTPS 可以让你的网站看起来更专业、更安全。整个过程主要分为**配置域名解析**、**在 GitHub 中设置**以及**验证 HTTPS** 几个关键步骤。
+
+
+
+### 前期准备
+
+1. **拥有一个 GitHub Pages 站点**：你的 `<username>.github.io`仓库或配置为 GitHub Pages 的项目仓库应已构建并可通过默认地址访问。
+2. **拥有一个自定义域名**：你需要在域名注册商（如阿里云、腾讯云、GoDaddy、Namecheap 等）购买一个域名。
+
+
+
+### 配置自定义域名
+
+#### 配置DNS解析记录
+
+登录你的域名注册商管理后台，找到 DNS 解析设置。根据你的需求选择以下一种或两种方式配置。
+
+1、为根域名（如 example.com）配置：你需要添加 **4 条 A 记录**，将域名指向 GitHub Pages 的 IP 地址。这是为了冗余和负载均衡，提升可用性。
+
+| 主机记录 (Name) | 记录类型 (Type) | 记录值 (Value / IP) |
+| :-------------- | :-------------- | :------------------ |
+| `@`             | A               | 185.199.108.153     |
+| `@`             | A               | 185.199.109.153     |
+| `@`             | A               | 185.199.110.153     |
+| `@`             | A               | 185.199.111.153     |
+
+2、为子域名（如 www.example.com）配置：
+
+添加 **1 条 CNAME 记录**，将子域名指向你的 GitHub Pages 默认域名。
+
+| 主机记录 (Name) | 记录类型 (Type) | 记录值 (Value)         |
+| :-------------- | :-------------- | :--------------------- |
+| `www`           | CNAME           | `<username>.github.io` |
+
+
+
+#### 在Github仓库中设置
+
+1. 进入你的 GitHub Pages 对应的仓库。
+2. 点击 **Settings** 选项卡。
+3. 在左侧边栏中找到 **Pages**。
+4. 在 **Custom domain** 字段中，输入你的自定义域名（例如 `www.example.com`或 `example.com`），然后点击 **Save**。
+5. **建议**：为了确保自定义域名设置持久化，最好在仓库的根目录下创建一个名为 `CNAME`的文件（无后缀），内容就是你的自定义域名（如 `example.com`），然后提交该文件。
+
+
+
+#### 启用HTTPS
+
+GitHub Pages **默认会自动为你的站点提供 HTTPS 支持**。但在你配置自定义域名后，可能需要手动启用或等待其自动配置。
+
+1. 在仓库的 **Settings > Pages** 页面，找到 **Enforce HTTPS** 选项。
+2. 如果它尚未被勾选，并且不是灰色不可用状态，请勾选它。
+3. 如果该选项暂时不可用，通常意味着 GitHub 正在为你的自定义域名申请和配置 SSL 证书，**这个过程可能需要几分钟到几小时**。请耐心等待，并时不时回来查看，一旦可用，立即勾选。
+
+启用 HTTPS 后，访问你的网站将会通过安全的加密连接，并且浏览器地址栏会显示锁形图标。
+
+
+
+注意事项：
+
+1. **混合内容警告**：开启 HTTPS 后，如果你的网页通过 `http://`加载了图片、CSS 或 JavaScript 等资源，浏览器会报“混合内容”错误，部分资源可能被阻止加载。请确保网页中所有资源的链接都是相对路径或使用了 `https://`。
+2. **“HTTPS 选项不可用或无法开启”**：检查你的 DNS 配置中是否包含了任何非 GitHub 的 IP 或地址，这可能会干扰证书签发。

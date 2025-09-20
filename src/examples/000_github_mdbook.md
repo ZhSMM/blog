@@ -269,3 +269,11 @@ git push
 - 打开 GitHub 仓库 → 点击顶部「Settings」→ 左侧「Pages」
 - 在「Source」中选择「Deploy from a branch」→ 分支选择 `gh-pages`（由 GitHub Actions 自动创建）
 - 点击「Save」，等待 1-2 分钟，页面会显示访问地址（如 `https://your-username.github.io/my-tech-notes/`）
+
+
+
+#### mdbook插件推荐
+
+1. [mdbook-toc](https://github.com/badboy/mdbook-toc)：自动生成目录
+2. [mdBook-pagetoc](https://github.com/JorelAli/mdBook-pagetoc)：侧边栏目录
+3. [mdbook-mermaid](https://github.com/badboy/mdbook-mermaid)：流程图
