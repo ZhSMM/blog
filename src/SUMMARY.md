@@ -2,9 +2,9 @@
 
 # 案例
 
-- [GitHub CI]()
-  - [github+markdown搭建笔记工具](./examples/000_github_mdbook.md)
-  - [github工作流详解](./examples/001_github_ci.md)
+- [GitHub CI](examples/github_ci/toc.md)
+  - [github+markdown搭建笔记工具](examples/github_ci/000_github_mdbook.md)
+  - [github工作流详解](examples/github_ci/001_github_ci.md)
 
 # 工具相关
 
