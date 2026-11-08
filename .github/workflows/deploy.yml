@@ -53,7 +53,8 @@ jobs:
             rustup-${{ runner.os }}-${{ env.RUST_TOOLCHAIN }}-
 
       - name: Install Rust & Cargo
-        uses: dtolnay/rust-toolchain@1
+        # @stable 取 action 的最新实现，Rust 版本由 toolchain 输入固定
+        uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: ${{ env.RUST_TOOLCHAIN }}
 
