@@ -92,7 +92,9 @@ def download(url: str, dest: Path) -> bytes:
     env = dict(os.environ)
     env["HHC_URL"] = url
     env["HHC_DEST"] = str(dest)
-    result = subprocess.run(cmd, capture_output=True, text=True, check=False, env=env)
+    result = subprocess.run(
+        cmd, capture_output=True, text=True, errors="replace", check=False, env=env
+    )
     if result.returncode != 0 or not dest.is_file():
         sys.stderr.write(result.stdout + result.stderr)
         print("下载失败（Invoke-WebRequest 返回 %d）" % result.returncode, file=sys.stderr)
@@ -178,6 +180,7 @@ def main(argv: list[str]) -> int:
         [expand_exe(), "-F:*", str(cab), str(unpack_dir)],
         capture_output=True,
         text=True,
+        errors="replace",
         check=False,
     )
     if result.returncode != 0:

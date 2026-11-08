@@ -150,6 +150,8 @@ jobs:
         # CHM 的全文检索索引依赖 32 位 Itircl.dll，而它需要注册成 COM 组件。
         # GitHub 的 Windows runner 以管理员身份运行，可以直接 regsvr32；
         # 注册失败也不影响构建——目录树和关键字索引照常生成，只是没有 Search 标签。
+        # 注意要用 SysWOW64 下的 regsvr32：System32 里的是 64 位版本，
+        # 注册不了 32 位 DLL，注册项得写进 32 位的注册表视图才对。
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Continue'
@@ -159,8 +161,10 @@ jobs:
             Write-Warning '系统里没有 Itircl.dll，CHM 将不含全文检索索引'
             exit 0
           }
-          Copy-Item $itircl (Join-Path $toolchain 'itircl.dll') -Force
-          & regsvr32.exe /s (Join-Path $toolchain 'itircl.dll')
+          $target = Join-Path $toolchain 'itircl.dll'
+          Copy-Item $itircl $target -Force
+          $regsvr32 = Join-Path $env:SystemRoot 'SysWOW64\regsvr32.exe'
+          & $regsvr32 /s $target
           Write-Host "regsvr32 退出码: $LASTEXITCODE"
 
       - name: Download book artifact
@@ -186,8 +190,16 @@ jobs:
           $code = $LASTEXITCODE
           Pop-Location
           if (Test-Path 'chm\notes.log') { Get-Content 'chm\notes.log' }
-          if ($code -ne 0) { throw "hhc.exe 编译失败，退出码 $code" }
+          # hhc.exe 是 GUI 时代的工具，编译成功也可能返回非 0 退出码，
+          # 所以以编译日志和产物为准，退出码只用来提示
+          if ($code -ne 0) { Write-Warning "hhc.exe 退出码 $code（以产物为准）" }
+          $log = Get-Content 'chm\notes.log' -Raw -ErrorAction SilentlyContinue
+          if (-not $log -or $log -notmatch 'Created\s+.*notes\.chm') {
+            throw '编译日志里没有 Created 记录，CHM 编译失败'
+          }
           if (-not (Test-Path 'chm\notes.chm')) { throw '没有生成 notes.chm' }
+          $size = (Get-Item 'chm\notes.chm').Length
+          if ($size -lt 100000) { throw "notes.chm 只有 $size 字节，明显不正常" }
           Get-Item 'chm\notes.chm' | Select-Object Name, Length
 
       - name: Upload CHM artifact
