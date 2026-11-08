@@ -2,3 +2,10 @@ book
 push.cmd
 edit.cmd
 .idea/
+
+# CHM 编译工程的中间产物
+chm/
+.hhc/
+.hhc-test/
+__pycache__/
+*.pyc

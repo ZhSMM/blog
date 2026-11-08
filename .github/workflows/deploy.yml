@@ -6,16 +6,15 @@ on:
     branches: [ "main" ]
     paths:
       - "src/**"                        # 匹配src目录下的所有目录和子目录
-      - "book.toml"                     # 配置文件变更也触发构建（可选）
+      - "book.toml"                     # 配置文件变更也触发构建
+      - "tools/**"                      # CHM 生成脚本变更
       - ".github/workflows/deploy.yml"  # 工作流文件本身变更时触发
   # 允许在 GitHub 界面手动触发工作流
   workflow_dispatch:
 
-# 设置 GITHUB_TOKEN 的权限，允许写入 Pages
+# 默认只读；写 Pages 的权限单独下放给 deploy job
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
 # 防止多个并发部署相互覆盖
 concurrency:
@@ -23,65 +22,178 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # ---------------------------------------------------------------------------
+  # 1) 构建 mdBook 站点
+  # ---------------------------------------------------------------------------
   build:
+    name: 构建 mdBook
     runs-on: ubuntu-latest
-    environment:
-      name: github-pages
     env:
-      MDBOOK_VERSION: ${{vars.MDBOOK_VERSION}}
-      MDBOOK_TOC_VERSION: ${{vars.MDBOOK_TOC_VERSION}}
-      MDBOOK_PAGETOC_VERSION: ${{vars.MDBOOK_PAGETOC_VERSION}}
-      MDBOOK_MERMAID_VERSION: ${{vars.MDBOOK_MERMAID_VERSION}}
+      # 固定 Rust 版本，避免 runner 默认版本随时间漂移导致构建结果不可复现
+      RUST_TOOLCHAIN: 1.92.0
+      MDBOOK_VERSION: ${{ vars.MDBOOK_VERSION }}
+      MDBOOK_TOC_VERSION: ${{ vars.MDBOOK_TOC_VERSION }}
+      MDBOOK_PAGETOC_VERSION: ${{ vars.MDBOOK_PAGETOC_VERSION }}
+      MDBOOK_MERMAID_VERSION: ${{ vars.MDBOOK_MERMAID_VERSION }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           # 获取完整提交历史，确保hashFiles能正确计算哈希
           fetch-depth: '0'
 
-      - name: Install Rust & Cargo
-        uses: dtolnay/rust-toolchain@stable
+      - name: Cache Rust toolchain
+        # 工具链本身（rustup 的 ~/.rustup）单独缓存：版本固定，命中后
+        # dtolnay/rust-toolchain 只需要做一次校验，不再重新下载组件
+        uses: actions/cache@v6
         with:
-          toolchain: stable
+          path: ~/.rustup
+          key: rustup-${{ runner.os }}-${{ env.RUST_TOOLCHAIN }}-v2
+          restore-keys: |
+            rustup-${{ runner.os }}-${{ env.RUST_TOOLCHAIN }}-
 
-      - name: Cache Cargo Dependencies
-        uses: actions/cache@v4
-        id: cargo-cache
+      - name: Install Rust & Cargo
+        uses: dtolnay/rust-toolchain@1
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
+
+      - name: Cache Cargo registry and binaries
+        # 缓存 crates.io 索引/源码、git 依赖，以及已编译好的 mdBook 二进制。
+        # key 里带上各个插件的版本号：升级某个插件时精确失效对应缓存，
+        # 其余情况则直接复用 ~/.cargo/bin，无需重新编译（省掉几分钟的构建）。
+        uses: actions/cache@v6
         with:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
             ~/.cargo/bin
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/book.toml') }}-${{vars.BUILD_CACHE_VERSION}}
+            ~/.cargo/.crates.toml
+          key: cargo-${{ runner.os }}-${{ env.RUST_TOOLCHAIN }}-mdbook${{ vars.MDBOOK_VERSION }}-toc${{ vars.MDBOOK_TOC_VERSION }}-pagetoc${{ vars.MDBOOK_PAGETOC_VERSION }}-mermaid${{ vars.MDBOOK_MERMAID_VERSION }}-v2
           restore-keys: |
-            ${{ runner.os }}-cargo-deps--
+            cargo-${{ runner.os }}-${{ env.RUST_TOOLCHAIN }}-
 
       - name: Install mdBook & Plugins
-        # 只有当缓存未命中时才执行安装
-        if: steps.cargo-cache.outputs.cache-hit != 'true'
+        # --locked 使用 crate 内自带的 Cargo.lock，保证依赖版本可复现。
+        # 已经装过同版本时 cargo 会输出 "already installed" 并以 0 退出，不会重复编译。
         run: |
-          cargo install mdbook@${MDBOOK_VERSION}
-          cargo install mdbook-toc@${MDBOOK_TOC_VERSION}
-          cargo install mdbook-pagetoc@${MDBOOK_PAGETOC_VERSION}
-          cargo install mdbook-mermaid@${MDBOOK_MERMAID_VERSION}
-
-      - name: List ~/.cargo/bin after caching
-        # 调试用，输出环境中的目录
-        run: ls -la ~/.cargo/bin
+          set -euo pipefail
+          cargo install --locked mdbook@${MDBOOK_VERSION}
+          cargo install --locked mdbook-toc@${MDBOOK_TOC_VERSION}
+          cargo install --locked mdbook-pagetoc@${MDBOOK_PAGETOC_VERSION}
+          cargo install --locked mdbook-mermaid@${MDBOOK_MERMAID_VERSION}
+          mdbook --version
 
       - name: Build the book
         run: mdbook build
 
-      - name: Upload artifact
-        # 将构建好的 book 目录上传为 Artifact
-        uses: actions/upload-pages-artifact@v3
+      - name: Upload book artifact
+        # 先以普通 artifact 传出，deploy job 还要往里塞 CHM
+        uses: actions/upload-artifact@v7
         with:
+          name: book
           path: ./book
+          if-no-files-found: error
 
-  deploy:
-    # 此任务依赖构建任务完成
+  # ---------------------------------------------------------------------------
+  # 2) 生成 CHM 离线文档
+  # ---------------------------------------------------------------------------
+  chm:
+    name: 生成 CHM 离线文档
+    runs-on: windows-latest
     needs: build
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+
+      - name: Prepare toolchain directory
+        # 先把目录建出来，actions/cache 在路径不存在时会跳过保存
+        shell: pwsh
+        run: New-Item -ItemType Directory -Force -Path (Join-Path $env:RUNNER_TEMP 'hhc-toolchain') | Out-Null
+
+      - name: Cache HTML Help Workshop
+        # hhc.exe 是微软 HTML Help Workshop 里的 CHM 编译器，官方不提供独立下载，
+        # 由 tools/extract_htmlhelp.py 从 htmlhelp.exe 自解压包里取出来。
+        # 解包结果缓存下来，后续构建只需跑一次编译。
+        id: hhc-cache
+        uses: actions/cache@v6
+        with:
+          path: ${{ runner.temp }}\hhc-toolchain
+          key: hhc-toolchain-${{ runner.os }}-v1
+          restore-keys: |
+            hhc-toolchain-${{ runner.os }}-
+
+      - name: Extract hhc.exe
+        if: steps.hhc-cache.outputs.cache-hit != 'true'
+        shell: pwsh
+        run: python tools/extract_htmlhelp.py --dest "$env:RUNNER_TEMP\hhc-toolchain"
+
+      - name: Enable full-text search index
+        # CHM 的全文检索索引依赖 32 位 Itircl.dll，而它需要注册成 COM 组件。
+        # GitHub 的 Windows runner 以管理员身份运行，可以直接 regsvr32；
+        # 注册失败也不影响构建——目录树和关键字索引照常生成，只是没有 Search 标签。
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Continue'
+          $toolchain = Join-Path $env:RUNNER_TEMP 'hhc-toolchain'
+          $itircl = Join-Path $env:SystemRoot 'SysWOW64\itircl.dll'
+          if (-not (Test-Path $itircl)) {
+            Write-Warning '系统里没有 Itircl.dll，CHM 将不含全文检索索引'
+            exit 0
+          }
+          Copy-Item $itircl (Join-Path $toolchain 'itircl.dll') -Force
+          & regsvr32.exe /s (Join-Path $toolchain 'itircl.dll')
+          Write-Host "regsvr32 退出码: $LASTEXITCODE"
+
+      - name: Download book artifact
+        uses: actions/download-artifact@v8
+        with:
+          name: book
+          path: book
+
+      - name: Generate CHM project
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          python tools/make_chm.py --book book --summary src/SUMMARY.md --out chm --name notes.chm --title "编程笔记"
+
+      - name: Compile CHM
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $hhc = Join-Path $env:RUNNER_TEMP 'hhc-toolchain\hhc.exe'
+          if (-not (Test-Path $hhc)) { throw "找不到 hhc.exe：$hhc" }
+          Push-Location chm
+          & $hhc 'notes.hhp'
+          $code = $LASTEXITCODE
+          Pop-Location
+          if (Test-Path 'chm\notes.log') { Get-Content 'chm\notes.log' }
+          if ($code -ne 0) { throw "hhc.exe 编译失败，退出码 $code" }
+          if (-not (Test-Path 'chm\notes.chm')) { throw '没有生成 notes.chm' }
+          Get-Item 'chm\notes.chm' | Select-Object Name, Length
+
+      - name: Upload CHM artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: chm
+          path: chm/notes.chm
+          if-no-files-found: error
+
+  # ---------------------------------------------------------------------------
+  # 3) 合并产物并部署到 GitHub Pages
+  # ---------------------------------------------------------------------------
+  deploy:
+    name: 部署到 GitHub Pages
+    needs: [ build, chm ]
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
 
     # 定义一个部署环境，便于在仓库设置中查看部署历史
     environment:
@@ -89,7 +201,31 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
 
     steps:
+      - name: Download book artifact
+        uses: actions/download-artifact@v8
+        with:
+          name: book
+          path: site
+
+      - name: Download CHM artifact
+        uses: actions/download-artifact@v8
+        with:
+          name: chm
+          path: site
+
+      - name: Verify site layout
+        run: |
+          set -euo pipefail
+          test -f site/index.html || { echo "site/index.html 不存在"; exit 1; }
+          test -f site/notes.chm   || { echo "site/notes.chm 不存在"; exit 1; }
+          ls -la site/notes.chm
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: site
+
       - name: Deploy to GitHub Pages
         id: deployment
         # 将已上传的 Artifact 部署到 Pages
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5
