@@ -164,8 +164,13 @@ jobs:
           $target = Join-Path $toolchain 'itircl.dll'
           Copy-Item $itircl $target -Force
           $regsvr32 = Join-Path $env:SystemRoot 'SysWOW64\regsvr32.exe'
-          & $regsvr32 /s $target
-          Write-Host "regsvr32 退出码: $LASTEXITCODE"
+          # regsvr32.exe 是 GUI 子系统程序，直接用 & 调用不会阻塞、也不会设置
+          # $LASTEXITCODE，这里用 Start-Process -Wait 明确等它跑完
+          $proc = Start-Process -FilePath $regsvr32 -ArgumentList @('/s', "`"$target`"") -Wait -PassThru
+          Write-Host "regsvr32 退出码: $($proc.ExitCode)"
+          if ($proc.ExitCode -ne 0) {
+            Write-Warning 'regsvr32 注册失败，CHM 可能不含全文检索索引（目录和索引不受影响）'
+          }
 
       - name: Download book artifact
         uses: actions/download-artifact@v8
@@ -201,6 +206,10 @@ jobs:
           $size = (Get-Item 'chm\notes.chm').Length
           if ($size -lt 100000) { throw "notes.chm 只有 $size 字节，明显不正常" }
           Get-Item 'chm\notes.chm' | Select-Object Name, Length
+          # hhc.exe 跑完会把 $LASTEXITCODE 留在 1，而 GitHub Actions 的 PowerShell
+          # 步骤结束时会把 $LASTEXITCODE 当成步骤退出码，这里显式清零并正常退出
+          $global:LASTEXITCODE = 0
+          exit 0
 
       - name: Upload CHM artifact
         uses: actions/upload-artifact@v7
