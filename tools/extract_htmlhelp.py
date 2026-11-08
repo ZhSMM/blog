@@ -32,6 +32,12 @@ import subprocess
 import sys
 from pathlib import Path
 
+# Windows 控制台默认编码不是 UTF-8（比如 GitHub runner 上是 cp1252），
+# 直接 print 中文会抛 UnicodeEncodeError，这里统一改成 UTF-8 并对无法编码的字符降级
+for _stream in (sys.stdout, sys.stderr):
+    if hasattr(_stream, "reconfigure"):
+        _stream.reconfigure(encoding="utf-8", errors="replace")
+
 # 微软官方 htmlhelp.exe（HTML Help Workshop 4.74.8702）的归档地址。
 # 原始 download.microsoft.com 链接已失效（HTTP 400），用 Wayback 的 if_ 模式取原始二进制。
 SOURCE_URL = (

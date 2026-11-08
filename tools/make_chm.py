@@ -45,6 +45,12 @@ import sys
 from pathlib import Path
 from urllib.parse import quote, unquote
 
+# Windows 控制台默认编码不是 UTF-8（比如 GitHub runner 上是 cp1252），
+# 直接 print 中文会抛 UnicodeEncodeError，这里统一改成 UTF-8 并对无法编码的字符降级
+for _stream in (sys.stdout, sys.stderr):
+    if hasattr(_stream, "reconfigure"):
+        _stream.reconfigure(encoding="utf-8", errors="replace")
+
 # mdBook 自动生成的跳转首页（体积很小，内容是一个 location.replace）
 REDIRECT_MARK = "location.replace"
 

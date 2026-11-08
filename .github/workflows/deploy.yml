@@ -112,6 +112,9 @@ jobs:
     name: 生成 CHM 离线文档
     runs-on: windows-latest
     needs: build
+    env:
+      # Windows runner 控制台默认 cp1252，脚本里的中文输出会炸，这里统一成 UTF-8
+      PYTHONIOENCODING: utf-8
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
