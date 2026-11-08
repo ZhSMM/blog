@@ -1,6 +1,6 @@
 [book]
 authors = ["zhangs"]
-language = "en"
+language = "zh-CN"
 multilingual = false
 src = "src"
 title = "编程笔记"
