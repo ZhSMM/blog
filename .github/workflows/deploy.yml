@@ -28,6 +28,10 @@ jobs:
   build:
     name: 构建 mdBook
     runs-on: ubuntu-latest
+    # MDBOOK_VERSION 等版本号定义在 github-pages 这个「环境」里，
+    # 只有声明了 environment 的 job 才能读到 vars 上下文，漏掉会装成空版本
+    environment:
+      name: github-pages
     env:
       # 固定 Rust 版本，避免 runner 默认版本随时间漂移导致构建结果不可复现
       RUST_TOOLCHAIN: 1.92.0
@@ -69,7 +73,7 @@ jobs:
             ~/.cargo/git
             ~/.cargo/bin
             ~/.cargo/.crates.toml
-          key: cargo-${{ runner.os }}-${{ env.RUST_TOOLCHAIN }}-mdbook${{ vars.MDBOOK_VERSION }}-toc${{ vars.MDBOOK_TOC_VERSION }}-pagetoc${{ vars.MDBOOK_PAGETOC_VERSION }}-mermaid${{ vars.MDBOOK_MERMAID_VERSION }}-v2
+          key: cargo-${{ runner.os }}-${{ env.RUST_TOOLCHAIN }}-mdbook${{ env.MDBOOK_VERSION }}-toc${{ env.MDBOOK_TOC_VERSION }}-pagetoc${{ env.MDBOOK_PAGETOC_VERSION }}-mermaid${{ env.MDBOOK_MERMAID_VERSION }}-v2
           restore-keys: |
             cargo-${{ runner.os }}-${{ env.RUST_TOOLCHAIN }}-
 
@@ -78,6 +82,12 @@ jobs:
         # 已经装过同版本时 cargo 会输出 "already installed" 并以 0 退出，不会重复编译。
         run: |
           set -euo pipefail
+          for v in MDBOOK_VERSION MDBOOK_TOC_VERSION MDBOOK_PAGETOC_VERSION MDBOOK_MERMAID_VERSION; do
+            if [ -z "${!v}" ]; then
+              echo "::error::版本变量 $v 为空，请检查 github-pages 环境里的变量配置"
+              exit 1
+            fi
+          done
           cargo install --locked mdbook@${MDBOOK_VERSION}
           cargo install --locked mdbook-toc@${MDBOOK_TOC_VERSION}
           cargo install --locked mdbook-pagetoc@${MDBOOK_PAGETOC_VERSION}
